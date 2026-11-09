@@ -1,0 +1,7 @@
+{
+  "required": true,
+  "package": "dev.faraway.k7q4m9.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "client": ["DrawSubmissionTimingMixin", "FarAwayKeyboardMixin", "WeightedVariantsAccess", "TreeTrunkPlacementMixin", "CameraMixin", "NoiseGeneratorAccess", "MaterialRuleContextAccess", "LevelRendererMixin", "LevelChunkBorderMixin", "FogRendererMixin", "StructurePaletteMixin", "BenchmarkMouseMixin", "BenchmarkInputMixin", "PauseScreenMixin", "ColorByLodHandMixin", "ColorByLodCloudMixin", "ClientOptionsMixin", "ClientOptionInstanceMixin", "ClientOptionsListMixin", "MipmapAtlasManagerMixin", "MipmapSpriteLoaderMixin", "MipmapSpriteContentsMixin", "SodiumOptionMixin", "SodiumStatefulOptionMixin", "SodiumOptionListMixin", "SodiumChunkBuilderMixin", "SodiumChunkFaceCullingMixin", "SodiumEntityCullingMixin", "ChunkTexelInterpolationMixin", "MipmapTextureManagerMixin", "ChunkStepProfilingMixin", "ChunkLoadProfilingMixin", "NoiseWorldgenProfilingMixin", "ChunkStatusTasksProfilingMixin", "HeightmapProfilingMixin", "LightBatchProfilingMixin", "ChunkGeneratorProfilingMixin", "FeaturePlacementProfilingMixin", "StructurePlacementProfilingMixin", "OreVeinProfilingMixin"],
+  "injectors": {"defaultRequire": 1}
+}

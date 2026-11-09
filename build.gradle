@@ -1,0 +1,104 @@
+plugins {
+    id 'net.fabricmc.fabric-loom' version '1.17.21'
+}
+
+version = '0.1.0-dev'
+group = 'dev.faraway.k7q4m9'
+
+repositories { mavenCentral() }
+
+dependencies {
+    minecraft 'com.mojang:minecraft:26.3'
+    implementation 'net.fabricmc:fabric-loader:0.20.1'
+    implementation 'net.fabricmc.fabric-api:fabric-api:0.165.2+26.3'
+}
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(25)
+    withSourcesJar()
+}
+
+loom {
+    runs {
+        client {
+            programArgs '--width', '1920', '--height', '1080'
+            if (project.hasProperty('farawayBenchmarkProbe')) vmArg '-Dfaraway.benchmarkProbe=true'
+            if (project.hasProperty('farawayWorldGrid')) vmArg '-Dfaraway.worldGrid=true'
+            if (project.hasProperty('farawayReferenceProfile')) vmArg '-Dfaraway.referenceProfile=true'
+            if (project.hasProperty('farawayBatchProbe')) vmArg '-Dfaraway.batchProbe=true'
+            if (project.hasProperty('farawayUncapped')) vmArg '-Dfaraway.uncapped=true'
+            if (project.hasProperty('farawaySmoke')) vmArg '-Dfaraway.smoke=true'
+            if (project.hasProperty('farawayStreamingSmoke')) {
+                vmArg '-Dfaraway.smoke=true'
+                vmArg '-Dfaraway.streamingSmoke=true'
+            }
+            if (project.hasProperty('farawayWorld')) {
+                programArgs '--quickPlaySingleplayer', project.property('farawayWorld').toString()
+            }
+        }
+    }
+}
+
+def identityDirectory = layout.buildDirectory.dir('generated/farawayIdentity')
+def identityInputs = files(fileTree('src/main'), 'build.gradle', 'gradle.properties', 'settings.gradle')
+sourceSets.main.resources.srcDir(identityDirectory)
+tasks.register('generateBuildIdentity') {
+    inputs.files(identityInputs)
+    inputs.property('modVersion', project.version.toString())
+    outputs.dir(identityDirectory)
+    doLast {
+        def digest = java.security.MessageDigest.getInstance('SHA-256')
+        identityInputs.files.findAll { it.isFile() }.sort { relativePath(it).replace('\\','/') }.each { file ->
+            digest.update(relativePath(file).replace('\\','/').getBytes('UTF-8'))
+            digest.update((byte)0)
+            digest.update(file.bytes)
+            digest.update((byte)0)
+        }
+        def output = identityDirectory.get().file('faraway-build.json').asFile
+        output.parentFile.mkdirs()
+        output.setText(groovy.json.JsonOutput.toJson([version:project.version.toString(), sourceSha256:HexFormat.of().formatHex(digest.digest())]), 'UTF-8')
+    }
+}
+
+processResources {
+    dependsOn 'generateBuildIdentity'
+    inputs.property 'version', project.version
+    filesMatching('fabric.mod.json') { expand version: project.version }
+}
+
+tasks.named('jar') {
+    from('LICENSE')
+}
+
+tasks.register('verifyCore', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.faraway.k7q4m9.diagnostics.FrameRecorderCheck'
+}
+tasks.register('verifyStructureMeshes', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.faraway.k7q4m9.mesh.StructureMeshCheck'
+}
+tasks.register('verifyVegetation', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.faraway.k7q4m9.mesh.VegetationCheck'
+}
+tasks.register('verifyGpuSurface', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.faraway.k7q4m9.worldgen.GpuSurfaceCheck'
+}
+
+// Core acceptance checks are plain Java, executed above rather than discovered by JUnit.
+tasks.named('sourcesJar') { dependsOn 'generateBuildIdentity' }
+tasks.named('test') { failOnNoDiscoveredTests = false }
+tasks.named('check') { dependsOn 'verifyCore' }
+
+// Runs the culling kernels in a hidden native context, without starting a world.
+tasks.register('verifyHiZ', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.faraway.k7q4m9.render.HiZGpuCheck'
+}

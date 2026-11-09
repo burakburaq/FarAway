@@ -1,0 +1,26 @@
+# Local documentation
+/docs/
+
+# Gradle and build output
+/.gradle/
+/build/
+*.class
+
+# Local JDK, Gradle, and development tools
+/.tools/
+
+# Minecraft development worlds, settings, logs, and captures
+/run/
+/logs/
+
+# IDE and operating system files
+/.idea/
+/.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# JVM crash and profiling output
+hs_err_pid*.log
+replay_pid*.log
+*.hprof

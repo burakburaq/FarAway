@@ -1,0 +1,23 @@
+#version 330
+#extension GL_ARB_shading_language_420pack : require
+#extension GL_ARB_compute_shader : require
+#extension GL_ARB_shader_storage_buffer_object : require
+layout(local_size_x=64) in;
+struct Weight {uvec2 fixedTriangles;uvec2 testedTriangles;uvec2 samples;};
+layout(std430,binding=0) readonly buffer Visibility {uint Visible[];};
+layout(std430,binding=1) readonly buffer Weights {Weight Tiles[];};
+layout(std430,binding=2) writeonly buffer Summary {uvec2 Totals[8];};
+uniform int TileCount,UseVisibility;
+shared uvec2 sums[512];
+uvec2 add64(uvec2 a,uvec2 b){uvec2 c=a+b;c.y+=c.x<a.x?1u:0u;return c;}
+void main(){
+ uint lane=gl_LocalInvocationID.x;uvec2 pre=uvec2(0u),post=uvec2(0u),sp=uvec2(0u),sq=uvec2(0u);
+ uvec2 pp=uvec2(0u),pv=uvec2(0u),qp=uvec2(0u),qv=uvec2(0u);
+ for(uint i=lane;i<uint(TileCount);i+=64u){Weight w=Tiles[i];bool plane=(w.samples.y&0x80000000u)!=0u;w.samples.y&=0x7fffffffu;bool visible=UseVisibility==0||Visible[i]!=0u;
+  uvec2 before=add64(w.fixedTriangles,w.testedTriangles),after=add64(w.fixedTriangles,visible?w.testedTriangles:uvec2(0u));
+  pre=add64(pre,before);post=add64(post,after);if(any(notEqual(before,uvec2(0u)))) {sp=add64(sp,w.samples);if(plane)pp=add64(pp,uvec2(1u,0u));else pv=add64(pv,uvec2(1u,0u));}if(any(notEqual(after,uvec2(0u)))) {sq=add64(sq,w.samples);if(plane)qp=add64(qp,uvec2(1u,0u));else qv=add64(qv,uvec2(1u,0u));}
+ }
+ sums[lane*8u]=pre;sums[lane*8u+1u]=post;sums[lane*8u+2u]=sp;sums[lane*8u+3u]=sq;sums[lane*8u+4u]=pp;sums[lane*8u+5u]=pv;sums[lane*8u+6u]=qp;sums[lane*8u+7u]=qv;barrier();
+ for(uint stride=32u;stride>0u;stride/=2u){if(lane<stride)for(uint k=0u;k<8u;k++)sums[lane*8u+k]=add64(sums[lane*8u+k],sums[(lane+stride)*8u+k]);barrier();}
+ if(lane==0u)for(uint k=0u;k<8u;k++)Totals[k]=sums[k];
+}

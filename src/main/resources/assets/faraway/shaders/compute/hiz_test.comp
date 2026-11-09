@@ -1,0 +1,45 @@
+#version 330
+#extension GL_ARB_compute_shader : require
+#extension GL_ARB_shader_storage_buffer_object : require
+#extension GL_ARB_shader_image_load_store : require
+#extension GL_ARB_shading_language_420pack : require
+layout(local_size_x=64) in;
+struct Bounds {vec4 lo;vec4 hi;};
+layout(std430,binding=0) readonly buffer TileBounds {Bounds Boxes[];};
+layout(std430,binding=1) writeonly buffer Visibility {uint Visible[];};
+layout(binding=0) uniform sampler2D Pyramid;
+uniform mat4 ViewProjection;
+uniform ivec2 ViewSize;
+uniform int TileCount,MaxMip,ZeroToOne;
+bool occluded(Bounds b){
+ if(all(lessThanEqual(b.lo.xyz,vec3(0)))&&all(greaterThanEqual(b.hi.xyz,vec3(0))))return false;
+ vec2 low=vec2(1e30),high=vec2(-1e30);float closest=0.0;
+ for(int i=0;i<8;i++){
+  vec3 p=vec3((i&1)!=0?b.hi.x:b.lo.x,(i&2)!=0?b.hi.y:b.lo.y,(i&4)!=0?b.hi.z:b.lo.z);
+  vec4 c=ViewProjection*vec4(p,1);if(c.w<=0.0001)return false;
+  vec3 n=c.xyz/c.w;float z=ZeroToOne!=0?n.z:n.z*0.5+0.5;
+  if(any(isnan(n))||any(isinf(n))||z<=0.0||z>=1.0)return false;
+  closest=max(closest,z);vec2 pixel=(n.xy*0.5+0.5)*vec2(ViewSize);low=min(low,pixel);high=max(high,pixel);
+ }
+ // Only the on-screen part can contribute pixels; off-screen corners do not veto culling.
+ low=max(floor(low)-vec2(2),vec2(0));high=min(ceil(high)+vec2(2),vec2(ViewSize)-vec2(1));
+ if(any(greaterThan(low,high)))return false;
+ vec2 extent=high-low+vec2(1);
+ // Thin projected tiles need narrow depth cells. A square based on the LONG axis
+ // can include the sky far outside the tile and reject every occlusion opportunity.
+ int mip=clamp(int(floor(log2(max(1.0,min(extent.x,extent.y)))))-1,0,MaxMip);
+ ivec2 a,z;
+ for(int attempt=0;attempt<32;attempt++){
+  float scale=exp2(float(mip));a=ivec2(floor(low/scale));z=ivec2(floor(high/scale));
+  if((z.x-a.x+1)*(z.y-a.y+1)<=256||mip==MaxMip)break;
+  mip++;
+ }
+ float ulp=uintBitsToFloat(floatBitsToUint(closest)+8u)-closest;
+ float bias=max(ulp,closest*0.00002+1e-12);
+ for(int y=a.y;y<=z.y;y++)for(int x=a.x;x<=z.x;x++){
+  // The entire conservative rectangle must be covered; one open cell keeps it visible.
+  float d=texelFetch(Pyramid,ivec2(x,y),mip).r;if(d<=closest+bias)return false;
+ }
+ return true;
+}
+void main(){uint i=gl_GlobalInvocationID.x;if(i>=uint(TileCount))return;Visible[i]=occluded(Boxes[i])?0u:1u;}

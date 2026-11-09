@@ -1,0 +1,33 @@
+#version 330
+#extension GL_ARB_compute_shader : require
+#extension GL_ARB_shader_storage_buffer_object : require
+#extension GL_ARB_shading_language_420pack : require
+layout(local_size_x=8,local_size_y=8) in;
+layout(std430,binding=0) writeonly buffer Result { int Heights[]; };
+uniform ivec2 Origin;
+uniform ivec2 Size;
+uniform int Spacing;
+uniform uvec2 Seed;
+uniform ivec3 Limits;
+uint hash(ivec2 p) {
+    uint h=uint(p.x)*0x9e3779b9u ^ uint(p.y)*0x85ebca6bu ^ Seed.x ^ (Seed.y*0xc2b2ae35u);
+    h^=h>>16; h*=0x7feb352du; h^=h>>15; h*=0x846ca68bu; return h^(h>>16);
+}
+int floorCell(int coordinate,int period) {
+    // Negative integer remainder is undefined in GLSL. Divide positive
+    // magnitudes only; preserve block precision at the world border.
+    return coordinate>=0?coordinate/period:-1-((-1-coordinate)/period);
+}
+float noise(ivec2 p,int period) {
+    ivec2 cell=ivec2(floorCell(p.x,period),floorCell(p.y,period));
+    vec2 t=vec2(p-cell*period)/float(period); t=t*t*(3.0-2.0*t);
+    float a=float(hash(cell)&65535u)/65535.0,b=float(hash(cell+ivec2(1,0))&65535u)/65535.0;
+    float c=float(hash(cell+ivec2(0,1))&65535u)/65535.0,d=float(hash(cell+ivec2(1,1))&65535u)/65535.0;
+    return mix(mix(a,b,t.x),mix(c,d,t.x),t.y)*2.0-1.0;
+}
+void main() {
+    ivec2 at=ivec2(gl_GlobalInvocationID.xy); if(any(greaterThanEqual(at,Size))) return;
+    ivec2 p=Origin+at*Spacing;
+    float height=float(Limits.z)+noise(p,2048)*70.0+noise(p,512)*24.0+noise(p,128)*8.0+noise(p,32)*2.0;
+    Heights[at.y*Size.x+at.x]=int(clamp(round(height),float(Limits.x+1),float(Limits.y)));
+}
