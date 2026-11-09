@@ -8,6 +8,7 @@
 
 # Local JDK, Gradle, and development tools
 /.tools/
+/start-client.cmd
 
 # Minecraft development worlds, settings, logs, and captures
 /run/
